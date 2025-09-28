@@ -5,6 +5,8 @@ import { BrowserRouter, useBlocker } from 'react-router-dom'
 import 'bootstrap/dist/css/bootstrap.min.css'
 import './index.css'
 import { ClerkProvider } from '@clerk/clerk-react'
+// import { AppProvider } from './context/AppContext.jsx'
+import { AppProvider } from './context/AppContext.jsx'
 
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 
@@ -15,7 +17,10 @@ if (!PUBLISHABLE_KEY) {
 createRoot(document.getElementById('root')).render(
   <ClerkProvider publishableKey={PUBLISHABLE_KEY}>
   <BrowserRouter>
+  <AppProvider>
+
     <App />
+  </AppProvider>
   </BrowserRouter>
 
   </ClerkProvider>

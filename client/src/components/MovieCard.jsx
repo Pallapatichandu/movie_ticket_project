@@ -5,9 +5,12 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import { Star as StarIcon } from "lucide-react";
 import timeFormate from "../lib/timeFormat";
+import { useAppContext } from "../context/AppContext";
 
 const MovieCard = ({ movie }) => {
   const navigate = useNavigate();
+    const { image_base_url } = useAppContext();
+
 
   return (
     <div
@@ -22,7 +25,7 @@ const MovieCard = ({ movie }) => {
     >
       {/* Movie Poster */}
       <img
-        src={movie.backdrop_path}
+        src={image_base_url + movie.backdrop_path}
         alt={movie.title}
         className="card-img-top rounded-top-4"
         style={{

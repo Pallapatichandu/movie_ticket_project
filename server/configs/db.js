@@ -1,14 +1,18 @@
-import mongoose from 'mongoose';
+import mongoose from "mongoose";
 
 const connectDB = async () => {
   try {
-    mongoose.connection.on('connected', () =>
-      console.log("Database connected ✅")
-    );
+    await mongoose.connect(`${process.env.MONGODB_URI}/Movie_tickets`, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+    });
 
-    await mongoose.connect(`${process.env.MONGODB_URI}/Movie_tickets`);
+    console.log("✅ MongoDB connected");
+    console.log("   Host:", mongoose.connection.host);
+    console.log("   DB Name:", mongoose.connection.name);
   } catch (error) {
-    console.error("MongoDB connection error:", error.message);
+    console.error("❌ MongoDB connection error:", error.message);
+    process.exit(1);
   }
 };
 
