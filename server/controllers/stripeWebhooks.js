@@ -25,21 +25,16 @@ export const stripeWebhook = async (req, res) => {
         const session = event.data.object;
         const bookingId = session.metadata.bookingId;
 
-        await Booking.findByIdAndUpdate(bookingId, {
-          isPaid: true,
-          paymentLink: "",
-        });
+      await Booking.findByIdAndUpdate(bookingId, { isPaid: true, paymentLink: "" });
 
-        console.log("✅ Booking updated for ID:", bookingId);
+// small delay
+await new Promise(resolve => setTimeout(resolve, 500));
 
-        // Small delay to ensure DB write completes
-        await new Promise(resolve => setTimeout(resolve, 500));
+await inngest.send({
+  name: "app/show.booked",
+  data: { bookingId },
+});
 
-        // Fire Inngest event
-        await inngest.send({
-          name: "app/show.booked",
-          data: { bookingId },
-        });
 
         console.log("✅ Inngest event fired for bookingId:", bookingId);
         break;
