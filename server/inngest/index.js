@@ -2,11 +2,12 @@ import { Inngest } from "inngest";
 import User from "../models/User.js";
 import Booking from "../models/Booking.js";
 import Show from "../models/show.js"; // ✅ Import Show model
+import sedEmail from "../configs/nodeMailer.js";
 
 // Create a client to send and receive events
 export const inngest = new Inngest({ id: "movie-ticket-booking" });
 
-// Clerk → MongoDB Sync Functions
+/* -------------------- Clerk → MongoDB Sync Functions -------------------- */
 
 // 1. User Created
 const syncUserCreation = inngest.createFunction(
@@ -53,7 +54,7 @@ const syncUserUpdation = inngest.createFunction(
   }
 );
 
-// Inngest Function to cancel bookings & release seats after 10 minutes if payment not made
+/* -------------------- Release Seats if Payment Not Done -------------------- */
 const releaseSeatsDeleteBooking = inngest.createFunction(
   { id: "release-seats--deleting-bookings" },
   { event: "app/checkpayment" },
@@ -86,10 +87,44 @@ const releaseSeatsDeleteBooking = inngest.createFunction(
   }
 );
 
+/* -------------------- Send Booking Confirmation Email -------------------- */
+const sendBookingConfirmationEmail = inngest.createFunction(
+  { id: "send-booking-confirmation-email" },
+  { event: "app/show.booked" },
+  async ({ event }) => {
+    const { bookingId } = event.data;
+
+    const booking = await Booking.findById(bookingId)
+      .populate({
+        path: "show",
+        populate: { path: "movie", model: "Movie" },
+      })
+      .populate("user");
+
+    if (!booking) return;
+
+    await sedEmail({
+      to: booking.user.email,
+      subject: `Payment Confirmation: "${booking.show.movie.title}" booked!`,
+      body: `<div style="font-family:Arial,sans-serif;line-height:1.5;">
+        <h2>Hi ${booking.user.name},</h2>
+        <p>Your booking for <strong style="color:#F84565;">"${booking.show.movie.title}"</strong> is confirmed!</p>
+        <p>
+          <strong>Date:</strong> ${new Date(booking.show.showDateTime).toLocaleDateString("en-US", { timeZone: "Asia/Kolkata" })}<br/>
+          <strong>Time:</strong> ${new Date(booking.show.showDateTime).toLocaleTimeString("en-US", { timeZone: "Asia/Kolkata" })}
+        </p>
+        <p>Enjoy the show!</p>
+        <p>Thanks for booking with us!<br/>- Quickticket Team</p>
+      </div>`,
+    });
+  }
+);
+
+/* -------------------- Export All Functions -------------------- */
 export const functions = [
   syncUserCreation,
   syncUserDeletion,
   syncUserUpdation,
   releaseSeatsDeleteBooking,
+  sendBookingConfirmationEmail,
 ];
-
