@@ -1,19 +1,26 @@
-import React from 'react';
-
+import React, { useEffect } from 'react';
 import MovieCard from '../components/MovieCard';
-import BlueCircle from '../components/BlueCircle';
 import { useAppContext } from '../context/AppContext';
 
 const Movies = () => {
-  const {shows}=useAppContext()
-  return (
-    <div className="position-relative container py-5 overflow-hidden mt-3">
-      {/* Blur Circles */}
-      <BlueCircle top="-100px" left="-50px" />
-      <BlueCircle bottom="-150px" right="-50px" />
+  const { shows } = useAppContext();
 
+  // Set body background and text color
+  useEffect(() => {
+    document.body.style.backgroundColor = "#0d1b2a"; // dark full-page background
+    document.body.style.color = "#ffffff";           // text color
+    return () => {
+      document.body.style.backgroundColor = "";
+      document.body.style.color = "";
+    };
+  }, []);
+
+  return (
+    <div className="container py-5 mt-3" style={{ minHeight: "100vh" }}>
       {/* Heading */}
-      <h1 className="mb-5 text-center fw-bold">Now Showing</h1>
+      <h1 className="mb-5 text-center fw-bold">
+        Now Showing
+      </h1>
 
       {/* Movies Grid */}
       {shows.length > 0 ? (
@@ -28,7 +35,9 @@ const Movies = () => {
           ))}
         </div>
       ) : (
-        <p className="text-center text-muted">No movies currently available.</p>
+        <p className="text-center text-muted">
+          No movies currently available.
+        </p>
       )}
     </div>
   );

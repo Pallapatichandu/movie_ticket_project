@@ -8,6 +8,7 @@ import timeFormat from "../lib/timeFormat";
 import dateFormat from "../lib/dateFormat";
 import Loading from "../components/Loding";
 import { useAppContext } from "../context/AppContext";
+import { Link } from "react-router-dom";
 
 const MyBookings = () => {
   const currency = import.meta.env.VITE_CURRENCY;
@@ -82,9 +83,9 @@ const MyBookings = () => {
                     {currency} {item.amount}
                   </p>
                   {!item.isPaid && (
-                    <button className="btn btn-primary btn-sm rounded-pill mb-3">
+                    <Link to={item.paymentLink} className="btn btn-primary btn-sm rounded-pill mb-3">
                       Pay Now
-                    </button>
+                    </Link>
                   )}
                   <hr className="border-secondary" />
                   <p className="small mb-1">
