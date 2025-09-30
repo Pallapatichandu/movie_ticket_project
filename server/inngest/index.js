@@ -72,22 +72,12 @@ const releaseSeatsDeleteBooking = inngest.createFunction(
   }
 );
 
-/* -------------------- Send Booking Confirmation Email -------------------- */
-/* -------------------- Send Booking Confirmation Email -------------------- */
 const sendBookingConfirmationEmail = inngest.createFunction(
   { id: "send-booking-confirmation-email" },
   { event: "app/show.booked" },
-  async ({ event, step }) => {
+  async ({ event }) => {
     try {
-      console.log("👉 Inngest triggered: sendBookingConfirmationEmail");
-      console.log("👉 Incoming event data:", event.data);
-
       const { bookingId } = event.data;
-      if (!bookingId) {
-        console.error("❌ No bookingId provided in event data");
-        return;
-      }
-
       const booking = await Booking.findById(bookingId)
         .populate({
           path: "show",
@@ -99,17 +89,10 @@ const sendBookingConfirmationEmail = inngest.createFunction(
         console.error("❌ Booking not found for ID:", bookingId);
         return;
       }
-
       if (!booking.user?.email) {
-        console.error("❌ Booking has no user email:", booking.user);
+        console.error("❌ No email found for booking:", bookingId);
         return;
       }
-
-      console.log("✅ Booking found:", {
-        bookingId: booking._id,
-        user: booking.user.email,
-        movie: booking.show?.movie?.title,
-      });
 
       await sendEmail({
         to: booking.user.email,
@@ -119,14 +102,16 @@ const sendBookingConfirmationEmail = inngest.createFunction(
           <p>Your booking for <strong style="color:#F84565;">"${booking.show.movie.title}"</strong> is confirmed!</p>
           <p>
             <strong>Date:</strong> ${new Date(booking.show.showDateTime).toLocaleDateString("en-US", { timeZone: "Asia/Kolkata" })}<br/>
-            <strong>Time:</strong> ${new Date(booking.show.showDateTime).toLocaleTimeString("en-US", { timeZone: "Asia/Kolkata" })}
+            <strong>Time:</strong> ${new Date(booking.show.showDateTime).toLocaleTimeString("en-US", { timeZone: "Asia/Kolkata" })}<br/>
+            <strong>Seats:</strong> ${booking.bookedSeats.join(", ")}<br/>
+            <strong>Amount Paid:</strong> ₹${booking.amount}
           </p>
-          <p>Enjoy the show!</p>
+          <p>Enjoy the show! 🍿</p>
           <p>Thanks for booking with us!<br/>- Quickticket Team</p>
         </div>`,
       });
 
-      console.log("✅ Email sent successfully to:", booking.user.email);
+      console.log(`✅ Confirmation email sent to ${booking.user.email}`);
     } catch (err) {
       console.error("❌ Error in sendBookingConfirmationEmail:", err);
     }
