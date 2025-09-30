@@ -1,6 +1,7 @@
 import stripe from "stripe";
 import Booking from "../models/Booking.js";
-import { inngest } from "../inngest/client.js"; // your inngest client setup
+import { inngest } from "../inngest/index.js";
+
 
 const stripeInstance = new stripe(process.env.STRIPE_SECRET_KEY);
 
