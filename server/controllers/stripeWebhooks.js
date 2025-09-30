@@ -1,8 +1,8 @@
-import Stripe from "stripe";
+import stripe from "stripe";
 import Booking from "../models/Booking.js";
-import { inngest } from "../inngest/index.js";
+import { inngest } from "../inngest/client.js"; // your inngest client setup
 
-const stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY);
+const stripeInstance = new stripe(process.env.STRIPE_SECRET_KEY);
 
 export const stripeWebhook = async (request, response) => {
   const sig = request.headers["stripe-signature"];
@@ -10,7 +10,7 @@ export const stripeWebhook = async (request, response) => {
 
   try {
     event = stripeInstance.webhooks.constructEvent(
-      request.body, // raw body required
+      request.body,
       sig,
       process.env.STRIPE_WEBHOOK_SECRET
     );
@@ -19,55 +19,35 @@ export const stripeWebhook = async (request, response) => {
   }
 
   try {
-    let bookingId = null;
-
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object;
-        bookingId = session.metadata?.bookingId;
+        const { bookingId } = session.metadata;
 
-        if (bookingId) {
-          await Booking.findByIdAndUpdate(bookingId, {
-            isPaid: true,
-            paymentLink: "",
-          });
-        }
-        break;
-      }
-
-      case "payment_intent.succeeded": {
-        const paymentIntent = event.data.object;
-        const sessionList = await stripeInstance.checkout.sessions.list({
-          payment_intent: paymentIntent.id,
+        await Booking.findByIdAndUpdate(bookingId, {
+          isPaid: true,
+          paymentLink: "",
         });
-        const session = sessionList.data[0];
-        bookingId = session?.metadata?.bookingId;
 
-        if (bookingId) {
-          await Booking.findByIdAndUpdate(bookingId, {
-            isPaid: true,
-            paymentLink: "",
-          });
-        }
+        // 🔥 Trigger Inngest function
+        await inngest.send({
+          name: "app/show.booked",
+          data: { bookingId },
+        });
+
         break;
       }
-
+      case "payment_intent.succeeded": {
+        // optional: handle same as above
+        break;
+      }
       default:
         console.log("Unhandled event type:", event.type);
     }
 
-    // ✅ Trigger Inngest event in both cases
-    if (bookingId) {
-      console.log("👉 Sending Inngest event app/show.booked for bookingId:", bookingId);
-      await inngest.send({
-        name: "app/show.booked",
-        data: { bookingId },
-      });
-    }
-
     response.json({ received: true });
   } catch (error) {
-    console.error("Webhook processing error:", error);
+    console.log("Webhook processing error:", error);
     response.status(500).send("Internal Server Error");
   }
 };
