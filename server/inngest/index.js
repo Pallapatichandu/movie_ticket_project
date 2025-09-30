@@ -5,7 +5,9 @@ import Show from "../models/show.js";
 import sendEmail from "../configs/nodeMailer.js";
 
 // Inngest client
-export const inngest = new Inngest({ id: "movie-ticket-booking" });
+export const inngest = new Inngest({ 
+  id: "movie-ticket-booking"
+});
 
 /* -------------------- Clerk → MongoDB Sync -------------------- */
 const syncUserCreation = inngest.createFunction(
@@ -72,28 +74,37 @@ const releaseSeatsDeleteBooking = inngest.createFunction(
   }
 );
 
+/* -------------------- Send Booking Confirmation Email -------------------- */
 const sendBookingConfirmationEmail = inngest.createFunction(
-  { id: "send-booking-confirmation-email" },
+  { 
+    id: "send-booking-confirmation-email",
+    retries: 2
+  },
   { event: "app/show.booked" },
-  async ({ event }) => {
-    try {
-      const { bookingId } = event.data;
-      const booking = await Booking.findById(bookingId)
+  async ({ event, step }) => {
+    const { bookingId } = event.data;
+
+    // Fetch booking with all related data
+    const booking = await step.run("fetch-booking-data", async () => {
+      return await Booking.findById(bookingId)
         .populate({
           path: "show",
           populate: { path: "movie", model: "Movie" },
         })
-        .populate("user");
+        .populate("user")
+        .lean();
+    });
 
-      if (!booking) {
-        console.error("❌ Booking not found for ID:", bookingId);
-        return;
-      }
-      if (!booking.user?.email) {
-        console.error("❌ No email found for booking:", bookingId);
-        return;
-      }
+    if (!booking) {
+      throw new Error(`Booking not found: ${bookingId}`);
+    }
 
+    if (!booking.show?.movie || !booking.user?.email) {
+      throw new Error(`Missing required booking data for: ${bookingId}`);
+    }
+
+    // Send confirmation email
+    await step.run("send-confirmation-email", async () => {
       await sendEmail({
         to: booking.user.email,
         subject: `Payment Confirmation: "${booking.show.movie.title}" booked`,
@@ -108,25 +119,18 @@ const sendBookingConfirmationEmail = inngest.createFunction(
           </p>
           <p>Enjoy the show! 🍿</p>
           <p>Thanks for booking with us!<br/>- Quickticket Team</p>
-        </div>`,
+        </div>`
       });
+    });
 
-      console.log(`✅ Confirmation email sent to ${booking.user.email}`);
-    } catch (err) {
-      console.error("❌ Error in sendBookingConfirmationEmail:", err);
-    }
+    return { success: true, emailSent: true };
   }
 );
-
 
 export const functions = [
   syncUserCreation,
   syncUserDeletion,
   syncUserUpdation,
   releaseSeatsDeleteBooking,
- sendBookingConfirmationEmail
+  sendBookingConfirmationEmail
 ];
-
-
-
-  
