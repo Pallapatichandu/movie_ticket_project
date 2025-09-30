@@ -2,7 +2,6 @@ import Stripe from "stripe";
 import Booking from "../models/Booking.js";
 import { inngest } from "../inngest/index.js";
 
-
 const stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 export const stripeWebhook = async (request, response) => {
@@ -11,7 +10,7 @@ export const stripeWebhook = async (request, response) => {
 
   try {
     event = stripeInstance.webhooks.constructEvent(
-      request.body, // raw body!
+      request.body, // raw body required
       sig,
       process.env.STRIPE_WEBHOOK_SECRET
     );
@@ -20,22 +19,19 @@ export const stripeWebhook = async (request, response) => {
   }
 
   try {
+    let bookingId = null;
+
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object;
-        const { bookingId } = session.metadata;
+        bookingId = session.metadata?.bookingId;
 
-        await Booking.findByIdAndUpdate(bookingId, {
-          isPaid: true,
-          paymentLink: "",
-        });
-        //send Confirmation email
-        await inngest.send({
-          name:"app/show.booked",
-          data:{bookingId}
-
-        })
-
+        if (bookingId) {
+          await Booking.findByIdAndUpdate(bookingId, {
+            isPaid: true,
+            paymentLink: "",
+          });
+        }
         break;
       }
 
@@ -45,8 +41,10 @@ export const stripeWebhook = async (request, response) => {
           payment_intent: paymentIntent.id,
         });
         const session = sessionList.data[0];
-        if (session?.metadata?.bookingId) {
-          await Booking.findByIdAndUpdate(session.metadata.bookingId, {
+        bookingId = session?.metadata?.bookingId;
+
+        if (bookingId) {
+          await Booking.findByIdAndUpdate(bookingId, {
             isPaid: true,
             paymentLink: "",
           });
@@ -56,6 +54,15 @@ export const stripeWebhook = async (request, response) => {
 
       default:
         console.log("Unhandled event type:", event.type);
+    }
+
+    // ✅ Trigger Inngest event in both cases
+    if (bookingId) {
+      console.log("👉 Sending Inngest event app/show.booked for bookingId:", bookingId);
+      await inngest.send({
+        name: "app/show.booked",
+        data: { bookingId },
+      });
     }
 
     response.json({ received: true });
