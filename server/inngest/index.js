@@ -1,71 +1,86 @@
 import { Inngest } from "inngest";
 import User from "../models/User.js";
 import Booking from "../models/Booking.js";
-import Show from "../models/show.js";
-import sendEmail from "../configs/nodeMailer.js";
+import Show from "../models/show.js"; // ✅ Import Show model
+import sedEmail from "../configs/nodeMailer.js";
 
-// Inngest client
+// Create a client to send and receive events
 export const inngest = new Inngest({ id: "movie-ticket-booking" });
 
-/* -------------------- Clerk → MongoDB Sync -------------------- */
+/* -------------------- Clerk → MongoDB Sync Functions -------------------- */
+
+// 1. User Created
 const syncUserCreation = inngest.createFunction(
   { id: "sync-user-from-clerk" },
   { event: "clerk/user.created" },
   async ({ event }) => {
     const { id, first_name, last_name, email_addresses, image_url } = event.data;
-    await User.create({
-      _id: id,
+
+    const userData = {
+      _id: id, // Ensure schema supports String IDs
       email: email_addresses[0].email_address,
       name: `${first_name} ${last_name}`,
       image: image_url,
-    });
+    };
+
+    await User.create(userData);
   }
 );
 
+// 2. User Deleted
 const syncUserDeletion = inngest.createFunction(
   { id: "delete-user-with-clerk" },
   { event: "clerk/user.deleted" },
   async ({ event }) => {
-    await User.findByIdAndDelete(event.data.id);
+    const { id } = event.data;
+    await User.findByIdAndDelete(id);
   }
 );
 
+// 3. User Updated
 const syncUserUpdation = inngest.createFunction(
   { id: "update-user-with-clerk" },
   { event: "clerk/user.updated" },
   async ({ event }) => {
     const { id, first_name, last_name, email_addresses, image_url } = event.data;
-    await User.findByIdAndUpdate(
-      id,
-      {
-        email: email_addresses[0].email_address,
-        name: `${first_name} ${last_name}`,
-        image: image_url,
-      },
-      { new: true }
-    );
+
+    const userData = {
+      email: email_addresses[0].email_address,
+      name: `${first_name} ${last_name}`,
+      image: image_url,
+    };
+
+    await User.findByIdAndUpdate(id, userData, { new: true });
   }
 );
 
-/* -------------------- Release Seats -------------------- */
+/* -------------------- Release Seats if Payment Not Done -------------------- */
 const releaseSeatsDeleteBooking = inngest.createFunction(
   { id: "release-seats--deleting-bookings" },
   { event: "app/checkpayment" },
   async ({ event, step }) => {
     const tenMinutesLater = new Date(Date.now() + 10 * 60 * 1000);
+
     await step.sleepUntil("wait-for-10-minutes", tenMinutesLater);
 
     await step.run("check-payment-status", async () => {
-      const booking = await Booking.findById(event.data.bookingId);
-      if (!booking) return;
+      const bookingId = event.data.bookingId;
+      const booking = await Booking.findById(bookingId);
+
+      if (!booking) return; // ✅ Booking already deleted
 
       if (!booking.isPaid) {
         const show = await Show.findById(booking.show);
+
         if (show) {
-          booking.bookedSeats.forEach(seat => delete show.occupiedSeats[seat]);
+          booking.bookedSeats.forEach((seat) => {
+            delete show.occupiedSeats[seat];
+          });
+
           show.markModified("occupiedSeats");
           await show.save();
         }
+
         await Booking.findByIdAndDelete(booking._id);
       }
     });
@@ -77,19 +92,20 @@ const sendBookingConfirmationEmail = inngest.createFunction(
   { id: "send-booking-confirmation-email" },
   { event: "app/show.booked" },
   async ({ event }) => {
-    // console.log("Triggered sendBookingConfirmationEmail for bookingId:", event.data.bookingId);
-    const{bookingId}=event.data;
+    const { bookingId } = event.data;
 
+    const booking = await Booking.findById(bookingId)
+      .populate({
+        path: "show",
+        populate: { path: "movie", model: "Movie" },
+      })
+      .populate("user");
 
+    if (!booking) return;
 
-    const booking = await Booking.findById(bookingId).populate({
-      path:'show',
-      populate:{path:"movie",model:"Movie"}
-    }).populate('user')
-
-    await sendEmail({
-      to:booking.user.email,
-      subject:`payment Confirmation:'${booking.show.movie.title}" booked`,
+    await sedEmail({
+      to: booking.user.email,
+      subject: `Payment Confirmation: "${booking.show.movie.title}" booked!`,
       body: `<div style="font-family:Arial,sans-serif;line-height:1.5;">
         <h2>Hi ${booking.user.name},</h2>
         <p>Your booking for <strong style="color:#F84565;">"${booking.show.movie.title}"</strong> is confirmed!</p>
@@ -99,12 +115,12 @@ const sendBookingConfirmationEmail = inngest.createFunction(
         </p>
         <p>Enjoy the show!</p>
         <p>Thanks for booking with us!<br/>- Quickticket Team</p>
-      </div>`
-    })
-
+      </div>`,
+    });
   }
 );
 
+/* -------------------- Export All Functions -------------------- */
 export const functions = [
   syncUserCreation,
   syncUserDeletion,
@@ -112,7 +128,3 @@ export const functions = [
   releaseSeatsDeleteBooking,
   sendBookingConfirmationEmail,
 ];
-
-
-
-    
