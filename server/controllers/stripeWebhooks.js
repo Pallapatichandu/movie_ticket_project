@@ -1,5 +1,8 @@
+import Stripe from "stripe";
 import Booking from "../models/Booking.js";
 import { inngest } from "../inngest/index.js";
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 export const stripeWebhook = async (req, res) => {
   const sig = req.headers["stripe-signature"];
@@ -7,37 +10,46 @@ export const stripeWebhook = async (req, res) => {
 
   try {
     event = stripe.webhooks.constructEvent(
-      req.body, // must be raw body
+      req.body, // must be raw body!
       sig,
       process.env.STRIPE_WEBHOOK_SECRET
     );
   } catch (err) {
-    console.error("❌ Webhook error:", err.message);
+    console.error("❌ Webhook signature error:", err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
-  switch (event.type) {
-    case "checkout.session.completed": {
-      const session = event.data.object;
-      const bookingId = session.metadata.bookingId;
+  // ✅ Handle completed checkout
+  if (event.type === "checkout.session.completed") {
+    const session = event.data.object;
+    const bookingId = session.metadata?.bookingId;
 
-      // ✅ Update booking as paid
-      const booking = await Booking.findByIdAndUpdate(
-        bookingId,
-        { isPaid: true },
-        { new: true }
-      );
+    if (!bookingId) {
+      console.error("❌ No bookingId in session metadata");
+      return res.status(400).send("Missing bookingId");
+    }
 
-      if (booking) {
-        // ✅ Trigger Inngest event
-        await inngest.send({
-          name: "app/show.booked",
-          data: { bookingId: booking._id.toString() },
-        });
-        console.log("🎉 Payment confirmed + event sent for", bookingId);
+    try {
+      const booking = await Booking.findById(bookingId);
+
+      if (!booking) {
+        console.error("❌ Booking not found:", bookingId);
+        return res.status(404).send("Booking not found");
       }
 
-      break;
+      booking.isPaid = true;
+      await booking.save();
+
+      // ✅ Trigger Inngest event
+      await inngest.send({
+        name: "app/show.booked",
+        data: { bookingId: booking._id.toString() },
+      });
+
+      console.log("🎉 Payment confirmed + event sent for", bookingId);
+    } catch (err) {
+      console.error("❌ Error updating booking:", err);
+      return res.status(500).send("Error updating booking");
     }
   }
 
