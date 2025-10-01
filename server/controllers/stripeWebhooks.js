@@ -10,7 +10,7 @@ export const stripeWebhook = async (req, res) => {
 
   try {
     event = stripe.webhooks.constructEvent(
-      req.body, // raw body from express.raw
+      req.body, // raw body
       sig,
       process.env.STRIPE_WEBHOOK_SECRET
     );
@@ -20,21 +20,40 @@ export const stripeWebhook = async (req, res) => {
   }
 
   try {
-    if (event.type === "checkout.session.completed") {
-      const session = event.data.object;
-      const bookingId = session.metadata.bookingId;
+    switch (event.type) {
+      case "checkout.session.completed": {
+        const session = event.data.object;
+        const bookingId = session.metadata.bookingId;
 
-      // ✅ Update booking
-      await Booking.findByIdAndUpdate(bookingId, {
-        isPaid: true,
-        paymentLink: "",
-      });
+        // ✅ Update booking
+        const booking = await Booking.findByIdAndUpdate(
+          bookingId,
+          { isPaid: true, paymentLink: "" },
+          { new: true }
+        );
 
-      // ✅ Fire Inngest event for email
-      await inngest.send({
-        name: "app/show.booked",  // must match function listener
-        data: { bookingId },
-      });
+        if (booking) {
+          console.log("✅ Booking updated for ID:", bookingId);
+
+          // ✅ Fire Inngest event
+          await inngest.send({
+            name: "app/show.booked",
+            data: { bookingId },
+          });
+          console.log("✅ Inngest event fired for bookingId:", bookingId);
+        } else {
+          console.warn("⚠️ Booking not found for ID:", bookingId);
+        }
+        break;
+      }
+
+      case "payment_intent.payment_failed": {
+        console.warn("⚠️ Payment failed:", event.data.object.id);
+        break;
+      }
+
+      default:
+        console.log(`Unhandled Stripe event type: ${event.type}`);
     }
 
     res.json({ received: true });
