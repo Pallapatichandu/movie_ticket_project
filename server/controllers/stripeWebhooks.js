@@ -1,8 +1,5 @@
-import Stripe from "stripe";
 import Booking from "../models/Booking.js";
 import { inngest } from "../inngest/index.js";
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 export const stripeWebhook = async (req, res) => {
   const sig = req.headers["stripe-signature"];
@@ -10,55 +7,39 @@ export const stripeWebhook = async (req, res) => {
 
   try {
     event = stripe.webhooks.constructEvent(
-      req.body, // raw body
+      req.body, // must be raw body
       sig,
       process.env.STRIPE_WEBHOOK_SECRET
     );
   } catch (err) {
-    console.error("❌ Webhook signature verification failed:", err.message);
+    console.error("❌ Webhook error:", err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
-  try {
-    switch (event.type) {
-      case "checkout.session.completed": {
-        const session = event.data.object;
-        const bookingId = session.metadata.bookingId;
+  switch (event.type) {
+    case "checkout.session.completed": {
+      const session = event.data.object;
+      const bookingId = session.metadata.bookingId;
 
-        // ✅ Update booking
-        const booking = await Booking.findByIdAndUpdate(
-          bookingId,
-          { isPaid: true, paymentLink: "" },
-          { new: true }
-        );
+      // ✅ Update booking as paid
+      const booking = await Booking.findByIdAndUpdate(
+        bookingId,
+        { isPaid: true },
+        { new: true }
+      );
 
-        if (booking) {
-          console.log("✅ Booking updated for ID:", bookingId);
-
-          // ✅ Fire Inngest event
-          await inngest.send({
-            name: "app/show.booked",
-            data: { bookingId },
-          });
-          console.log("✅ Inngest event fired for bookingId:", bookingId);
-        } else {
-          console.warn("⚠️ Booking not found for ID:", bookingId);
-        }
-        break;
+      if (booking) {
+        // ✅ Trigger Inngest event
+        await inngest.send({
+          name: "app/show.booked",
+          data: { bookingId: booking._id.toString() },
+        });
+        console.log("🎉 Payment confirmed + event sent for", bookingId);
       }
 
-      case "payment_intent.payment_failed": {
-        console.warn("⚠️ Payment failed:", event.data.object.id);
-        break;
-      }
-
-      default:
-        console.log(`Unhandled Stripe event type: ${event.type}`);
+      break;
     }
-
-    res.json({ received: true });
-  } catch (error) {
-    console.error("❌ Webhook handler error:", error);
-    res.status(500).send("Internal server error");
   }
+
+  res.json({ received: true });
 };
