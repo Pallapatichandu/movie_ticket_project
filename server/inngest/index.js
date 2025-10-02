@@ -20,7 +20,7 @@ const syncUserCreation = inngest.createFunction(
     const userData = {
       _id: id, // Ensure schema supports String IDs
       email: email_addresses[0].email_address,
-      name: first_name + " " +last_name,
+      name: `${first_name} ${last_name}`,
       image: image_url,
     };
 
@@ -46,13 +46,12 @@ const syncUserUpdation = inngest.createFunction(
     const { id, first_name, last_name, email_addresses, image_url } = event.data;
 
     const userData = {
-      _id:id,
       email: email_addresses[0].email_address,
-      name: first_name + " " +last_name,
+      name: `${first_name} ${last_name}`,
       image: image_url,
     };
 
-    await User.findByIdAndUpdate(id, userData);
+    await User.findByIdAndUpdate(id, userData, { new: true });
   }
 );
 
@@ -62,26 +61,29 @@ const releaseSeatsDeleteBooking = inngest.createFunction(
   { event: "app/checkpayment" },
   async ({ event, step }) => {
     const tenMinutesLater = new Date(Date.now() + 10 * 60 * 1000);
+
     await step.sleepUntil("wait-for-10-minutes", tenMinutesLater);
 
     await step.run("check-payment-status", async () => {
       const bookingId = event.data.bookingId;
       const booking = await Booking.findById(bookingId);
 
-      if (!booking) return; // already deleted
-      if (booking.isPaid) return; // ✅ skip if already paid
+      if (!booking) return; // ✅ Booking already deleted
 
-      const show = await Show.findById(booking.show);
-      if (show) {
-        booking.bookedSeats.forEach((seat) => {
-          delete show.occupiedSeats[seat];
-        });
-        show.markModified("occupiedSeats");
-        await show.save();
+      if (!booking.isPaid) {
+        const show = await Show.findById(booking.show);
+
+        if (show) {
+          booking.bookedSeats.forEach((seat) => {
+            delete show.occupiedSeats[seat];
+          });
+
+          show.markModified("occupiedSeats");
+          await show.save();
+        }
+
+        await Booking.findByIdAndDelete(booking._id);
       }
-
-      await Booking.findByIdAndDelete(booking._id);
-      console.log(`❌ Booking ${bookingId} deleted (payment not completed)`);
     });
   }
 );
@@ -100,14 +102,7 @@ const sendBookingConfirmationEmail = inngest.createFunction(
       })
       .populate("user");
 
-    if (!booking) {
-      console.warn(`Booking ${bookingId} not found. Skipping email.`);
-      return;
-    }
-    if (!booking.isPaid) {
-      console.warn(`Booking ${bookingId} not paid yet. Skipping email.`);
-      return;
-    }
+    if (!booking) return;
 
     await sendEmail({
       to: booking.user.email,
@@ -116,28 +111,21 @@ const sendBookingConfirmationEmail = inngest.createFunction(
         <h2>Hi ${booking.user.name},</h2>
         <p>Your booking for <strong style="color:#F84565;">"${booking.show.movie.title}"</strong> is confirmed!</p>
         <p>
-          <strong>Date:</strong> ${new Date(
-            booking.show.showDateTime
-          ).toLocaleDateString("en-US", { timeZone: "Asia/Kolkata" })}<br/>
-          <strong>Time:</strong> ${new Date(
-            booking.show.showDateTime
-          ).toLocaleTimeString("en-US", { timeZone: "Asia/Kolkata" })}
+          <strong>Date:</strong> ${new Date(booking.show.showDateTime).toLocaleDateString("en-US", { timeZone: "Asia/Kolkata" })}<br/>
+          <strong>Time:</strong> ${new Date(booking.show.showDateTime).toLocaleTimeString("en-US", { timeZone: "Asia/Kolkata" })}
         </p>
         <p>Enjoy the show!</p>
         <p>Thanks for booking with us!<br/>- Quickticket Team</p>
       </div>`,
     });
-
-    console.log(`✅ Confirmation email sent to ${booking.user.email}`);
   }
 );
-
 
 /* -------------------- Export All Functions -------------------- */
 export const functions = [
   syncUserCreation,
   syncUserDeletion,
   syncUserUpdation,
- releaseSeatsDeleteBooking,
- sendBookingConfirmationEmail
+  releaseSeatsDeleteBooking,
+  sendBookingConfirmationEmail,
 ];
