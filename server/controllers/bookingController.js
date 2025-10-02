@@ -11,25 +11,29 @@ const checkSeatsAvailability = async (showId, selectedSeats) => {
   if (!showData) return false;
 
   const occupiedSeats = showData.occupiedSeats || {};
-  return !selectedSeats.some(seat => occupiedSeats[seat]);
+  return !selectedSeats.some((seat) => occupiedSeats[seat]);
 };
 
 // Create Booking & Stripe Checkout Session
 export const createBooking = async (req, res) => {
   try {
-    const { userId } = req.auth; // ✅ Make sure auth middleware sets this
+    const { userId } = req.auth(); // ✅ must be a function
     const { showId, selectedSeats } = req.body;
     const { origin } = req.headers;
 
-    // check seat availability
+    // 1. Check seats availability
     const available = await checkSeatsAvailability(showId, selectedSeats);
-    if (!available) return res.json({ success: false, message: "Seats not available" });
+    if (!available)
+      return res.json({ success: false, message: "Seats not available" });
 
     const showData = await Show.findById(showId).populate("movie");
-    if (!showData) return res.json({ success: false, message: "Show not found" });
+    if (!showData)
+      return res.json({ success: false, message: "Show not found" });
 
-    // mark seats as occupied
-    selectedSeats.forEach(seat => (showData.occupiedSeats[seat] = true));
+    // 2. Mark seats as occupied by this user
+    selectedSeats.forEach((seat) => {
+      showData.occupiedSeats[seat] = userId;
+    });
 
     const booking = await Booking.create({
       user: userId,
@@ -42,7 +46,7 @@ export const createBooking = async (req, res) => {
     showData.markModified("occupiedSeats");
     await showData.save();
 
-    // Stripe session
+    // 3. Stripe Checkout session
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       line_items: [
@@ -50,21 +54,21 @@ export const createBooking = async (req, res) => {
           price_data: {
             currency: "usd",
             product_data: { name: showData.movie.title },
-            unit_amount: Math.round(booking.amount * 100), // ✅ safer
+            unit_amount: Math.round(booking.amount * 100),
           },
           quantity: 1,
         },
       ],
       mode: "payment",
       success_url: `${origin}/loading/my-bookings`,
-      cancel_url: `${origin}/shows/${showId}`, // ✅ better UX
+      cancel_url: `${origin}/shows/${showId}`,
       metadata: { bookingId: booking._id.toString() },
     });
 
     booking.paymentLink = session.url;
     await booking.save();
 
-    // Run Inngest Scheduler Function to check payment status after 10m
+    // 4. Fire delayed cleanup (check payment after 10m)
     await inngest.send({
       name: "app/checkpayment",
       data: { bookingId: booking._id.toString() },
@@ -80,7 +84,7 @@ export const createBooking = async (req, res) => {
 // Get user bookings
 export const getMyBookings = async (req, res) => {
   try {
-    const { userId } = req.auth;
+    const { userId } = req.auth(); // ✅ fix here
     const bookings = await Booking.find({ user: userId }).populate({
       path: "show",
       populate: { path: "movie" },

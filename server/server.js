@@ -9,7 +9,8 @@ import showRouter from "./routes/showRoutes.js";
 import bookingRouter from "./routes/bookingRouters.js";
 import adminRouter from "./routes/adminRouter.js";
 import userRouter from "./routes/userRouters.js";
-import { stripeWebhook } from "./controllers/stripeWebhooks.js";
+import { stripeWebhooks } from "./controllers/stripeWebhooks.js";
+
 
 const app = express();
 const port = 3000;
@@ -22,7 +23,7 @@ await connectDB();
 app.post(
   "/api/stripe",
   express.raw({ type: "application/json" }),
-  stripeWebhook
+  stripeWebhooks
 );
 
 /* -------------------- GLOBAL MIDDLEWARE -------------------- */
