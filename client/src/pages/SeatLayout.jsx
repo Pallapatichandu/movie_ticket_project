@@ -114,7 +114,7 @@ const bookTickets = async () => {
     );
 
     if (data.success) {
-      window.location.href=data.url
+      window.location.href=data.url;
       
 
     } else {
@@ -232,4 +232,3 @@ const bookTickets = async () => {
 };
 
 export default SeatLayout;
-

@@ -7,7 +7,7 @@ import Movie from "../models/Movie.js";
 // Get User Bookings
 export const getUserBookings = async (req, res) => {
   try {
-    const user = req.auth.userId;
+    const user = req.auth().userId;
     const bookings = await Booking.find({ user })
       .populate({
         path: "show",
@@ -26,7 +26,7 @@ export const getUserBookings = async (req, res) => {
 export const updateFavorite = async (req, res) => {
   try {
     const { movieId } = req.body;
-    const userId = req.auth.userId;
+    const userId = req.auth().userId;
 
     const user = await clerkClient.users.getUser(userId);
 

@@ -9,22 +9,18 @@ import showRouter from "./routes/showRoutes.js";
 import bookingRouter from "./routes/bookingRouters.js";
 import adminRouter from "./routes/adminRouter.js";
 import userRouter from "./routes/userRouters.js";
-import { stripeWebhooks } from "./controllers/stripeWebhooks.js";
+import {stripeWebhooks} from './controllers/stripeWebhooks.js'
+
 
 
 const app = express();
 const port = 3000;
 
-await connectDB();
+await connectDB()
 
-/* -------------------- STRIPE WEBHOOK ROUTE -------------------- */
-// ⚠️ Must come BEFORE express.json()
-// Use raw body parsing only for this route
-app.post(
-  "/api/stripe",
-  express.raw({ type: "application/json" }),
-  stripeWebhooks
-);
+app.use('/api/stripe',express.raw({type:"application/json"}),stripeWebhooks)
+
+
 
 /* -------------------- GLOBAL MIDDLEWARE -------------------- */
 app.use(cors());
@@ -47,3 +43,5 @@ app.use("/api/user", userRouter);
 app.listen(port, () =>
   console.log(`🚀 Server running at http://localhost:${port}`)
 );
+
+
