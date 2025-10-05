@@ -57,44 +57,32 @@ const syncUserUpdation = inngest.createFunction(
 );
 
 /* -------------------- Release Seats if Payment Not Done -------------------- */
-const releaseSeatsDeleteBooking = inngest.createFunction(
-  { id: "release-seats-delete-booking" },
-  { event: "app/checkpayment" },
-  async ({ event, step }) => {
-    const tenMinutesLater = new Date(Date.now() + 10 * 60 * 1000);
-    await step.sleepUntil("wait-for-10-minutes", tenMinutesLater);
+const releaseSeatsDeleteBooking=inngest.createFunction(
+  {id:'release-seats-delete-booking'},
+  {event:'app/checkpayment'},
+  async ({event,step})=>{
+    const tenMinutesLater=new Date(Date.now()+10*60*1000)
+    await step.sleepUntil('wait-for-10-minutes',tenMinutesLater)
+    await step.run('check-payment-status',async()=>{
+      const bookingId=event.data.bookingId
+      const booking=await Booking.findById(bookingId)
+//if payment is not made,release seates and delete ,Bookings
 
-    await step.run("check-payment-status", async () => {
-      const bookingId = event.data.bookingId;
-      const booking = await Booking.findById(bookingId);
+    if(!booking.isPaid){
+      const show=await Show.findById(booking.show);
+      booking.bookedSeats.forEach((seat)=>{
+        delete show.occupiedSeats[seat]
 
-      if (!booking) {
-        console.log(`❌ Booking not found: ${bookingId}`);
-        return;
-      }
+      });
+      show.markModified("occupiedSeats")
+      await show.save()
+      await Booking.findByIdAndDelete(booking._id)
+    }
 
-      console.log(`🔍 Checking booking: ${bookingId}, isPaid = ${booking.isPaid}`);
+    })
 
-      if (booking.isPaid === false) {
-        // Release seats only for unpaid bookings
-        const show = await Show.findById(booking.show);
-        if (show) {
-          booking.bookedSeats.forEach((seat) => {
-            delete show.occupiedSeats[seat];
-          });
-          show.markModified("occupiedSeats");
-          await show.save();
-        }
-
-        await Booking.findByIdAndDelete(booking._id);
-        console.log(`🗑️ Deleted unpaid booking: ${bookingId}`);
-      } else {
-        console.log(`✅ Booking already paid, not deleting: ${bookingId}`);
-      }
-    });
   }
-);
-
+)
 
 
 
