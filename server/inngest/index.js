@@ -1,8 +1,8 @@
 import { Inngest } from "inngest";
 import User from "../models/User.js";
-import Booking from "../models/Booking.js";
-import Show from "../models/show.js"; // ✅ Import Show model
 import sendEmail from "../configs/nodeMailer.js";
+import Booking from "../models/Booking.js";
+import Show from "../models/show.js";
 
 
 // Create a client to send and receive events
@@ -57,75 +57,35 @@ const syncUserUpdation = inngest.createFunction(
 );
 
 /* -------------------- Release Seats if Payment Not Done -------------------- */
-const releaseSeatsDeleteBooking = inngest.createFunction(
-  { id: "release-seats--deleting-bookings" },
-  { event: "app/checkpayment" },
-  async ({ event, step }) => {
-    await step.sleep(10 * 60 * 1000); // 10 minutes
+const releaseSeatsDeleteBooking=inngest.createFunction(
+  {id:'release-seats-delete-booking'},
+  {event:'app/checkpayment'},
+  async ({event,step})=>{
+    const tenMinutesLater=new Date(Date.now()+10*60*1000)
+    await step.sleepUntil('wait-for-10-minutes',tenMinutesLater)
+    await step.run('check-payment-status',async()=>{
+      const bookingId=event.data.bookingId
+      const booking=await Booking.findById(bookingId)
+//if payment is not made,release seates and delete ,Bookings
 
-    const booking = await Booking.findById(event.data.bookingId);
-    if (!booking) return;
-    if (booking.isPaid) return; // ✅ Only delete if unpaid
+    if(!booking.isPaid){
+      const show=await Show.findById(booking.show);
+      booking.bookedSeats.forEach((seat)=>{
+        delete show.occupiedSeats[seat]
 
-    const show = await Show.findById(booking.show);
-    if (show) {
-      booking.bookedSeats.forEach(seat => delete show.occupiedSeats[seat]);
-      show.markModified("occupiedSeats");
-      await show.save();
+      });
+      show.markModified("occupiedSeats")
+      await show.save()
+      await Booking.findOneAndDelete(booking._id)
     }
 
-    await Booking.findByIdAndDelete(booking._id);
-    console.log(`❌ Booking ${booking._id} deleted (not paid)`);
+    })
+
   }
-);
+)
 
 
-
-/* -------------------- Send Booking Confirmation Email -------------------- */
-const sendBookingConfirmationEmail = inngest.createFunction(
-  { id: "send-booking-confirmation-email" },
-  { event: "app/show.booked" },
-  async ({ event }) => {
-    const { bookingId } = event.data;
-
-    const booking = await Booking.findById(bookingId)
-      .populate({
-        path: "show",
-        populate: { path: "movie", model: "Movie" },
-      })
-      .populate("user");
-
-    if (!booking) {
-      console.warn(`Booking ${bookingId} not found. Skipping email.`);
-      return;
-    }
-    if (!booking.isPaid) {
-      console.warn(`Booking ${bookingId} not paid yet. Skipping email.`);
-      return;
-    }
-
-    await sendEmail({
-      to: booking.user.email,
-      subject: `Payment Confirmation: "${booking.show.movie.title}" booked!`,
-      body: `<div style="font-family:Arial,sans-serif;line-height:1.5;">
-        <h2>Hi ${booking.user.name},</h2>
-        <p>Your booking for <strong style="color:#F84565;">"${booking.show.movie.title}"</strong> is confirmed!</p>
-        <p>
-          <strong>Date:</strong> ${new Date(
-            booking.show.showDateTime
-          ).toLocaleDateString("en-US", { timeZone: "Asia/Kolkata" })}<br/>
-          <strong>Time:</strong> ${new Date(
-            booking.show.showDateTime
-          ).toLocaleTimeString("en-US", { timeZone: "Asia/Kolkata" })}
-        </p>
-        <p>Enjoy the show!</p>
-        <p>Thanks for booking with us!<br/>- Quickticket Team</p>
-      </div>`,
-    });
-
-    console.log(`✅ Confirmation email sent to ${booking.user.email}`);
-  }
-);
+/* 
 
 
 /* -------------------- Export All Functions -------------------- */
@@ -133,6 +93,7 @@ export const functions = [
   syncUserCreation,
   syncUserDeletion,
   syncUserUpdation,
- releaseSeatsDeleteBooking,
- sendBookingConfirmationEmail
+  releaseSeatsDeleteBooking
+ 
+
 ];

@@ -80,15 +80,19 @@ export const createBooking = async (req, res) => {
  })
  booking.paymentLink=session.url
 await booking.save();
+//Run inngest 
+await inngest.send({
+  name:"app/checkpayment",
+  data:{
+    bookingId:booking._id.toString()
+  }
+})
+
+
 res.json({success:true,url:session.url})
 
 
-    // 6️⃣ Send to Inngest for async payment check
-    // await inngest.send({
-    //   name: "app/checkpayment",
-    //   data: { bookingId: booking._id.toString() },
-    // });
-
+   
     
   } catch (error) {
     console.error("Error in createBooking:", error);
