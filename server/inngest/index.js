@@ -1,7 +1,6 @@
 import { Inngest } from "inngest";
 import User from "../models/User.js";
-import Booking from "../models/Booking.js";
-import Show from "../models/show.js";
+
 
 
 
@@ -70,7 +69,7 @@ const syncUserUpdation = inngest.createFunction(
 export const functions = [
   syncUserCreation,
   syncUserDeletion,
-  syncUserUpdation,
+  syncUserUpdation
  
   
  
