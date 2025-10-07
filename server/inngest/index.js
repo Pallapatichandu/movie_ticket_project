@@ -59,33 +59,7 @@ const syncUserUpdation = inngest.createFunction(
   }
 );
 //inngest function to cancel booking  and releade booking seats of show after 10 minutes of booking create if payment is not made
-const releaseSeatsDeleteBooking = inngest.createFunction(
-  { id: "release-seats-deleting-bookings" },
-  { event: "app/checkpayment" },
-  async ({ event, step }) => {
-    // Wait 10 minutes
-    const tenMinutesLater = new Date(Date.now() + 4 * 60 * 1000);
-    await step.sleepUntil("wait-10-minutes", tenMinutesLater);
 
-    await step.run("check-payment-status", async () => {
-      const bookingId = event.data.bookingId;
-      const booking = await Booking.findById(bookingId);
-
-      if (!booking) return; // Already deleted
-      if (booking.isPaid) return; // Paid bookings remain
-
-      const show = await Show.findById(booking.show);
-      if (show) {
-        booking.bookedSeats.forEach(seat => delete show.occupiedSeats[seat]);
-        show.markModified("occupiedSeats");
-        await show.save();
-      }
-
-      await Booking.findByIdAndDelete(booking._id);
-      console.log(`❌ Booking ${booking._id} deleted (not paid)`);
-    });
-  }
-);
 
 
 
@@ -96,7 +70,7 @@ export const functions = [
   syncUserCreation,
   syncUserDeletion,
   syncUserUpdation,
-  releaseSeatsDeleteBooking
+  
  
  
   
