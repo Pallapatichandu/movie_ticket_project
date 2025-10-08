@@ -61,29 +61,43 @@ const syncUserUpdation = inngest.createFunction(
   }
 );
 //inngest function to cancel booking  and releade booking seats of show after 10 minutes of booking create if payment is not made
-const releaseAndDeleteBookings=inngest.createFunction(
-  {id:'release-seates-delete-booking'},
-  {event:'app/checkpayment'},
-  async({event,step})=>{
-    const threeMinutesLater=new Date(Date.now() +3*60*1000 )
-    await step.sleepUntil('wait-for-3-minutes',threeMinutesLater)
-    await step.run('check-payment-status',async()=>{
-      const bookingId=event.data.bookingId
-      const booking=await Booking.findById(bookingId)
-      
-      if(!booking.isPaid){
-        const show=await Show.findById(booking.show)
-        booking.bookedSeats.forEach((seat)=>{
-          delete show.occupiedSeats[seat]
-        })
-        show.markModified('occupiedSeats')
-        await show.save()
-        await Booking.findByIdAndDelete(booking._id)
-      }
+const releaseAndDeleteBookings = inngest.createFunction(
+  { id: "release-seats-delete-booking" },
+  { event: "app/checkpayment" },
+  async ({ event, step }) => {
+    const bookingId = event.data.bookingId;
 
-    })
+    // Wait 10 minutes (can adjust)
+    const tenMinutesLater = new Date(Date.now() + 10 * 60 * 1000);
+    await step.sleepUntil("wait-for-10-minutes", tenMinutesLater);
+
+    // Fetch booking just before deletion
+    const booking = await Booking.findById(bookingId);
+    if (!booking) {
+      console.log(`Booking ${bookingId} does not exist. Skipping deletion.`);
+      return;
+    }
+
+    // Check if booking is paid
+    if (booking.isPaid) {
+      console.log(`Booking ${bookingId} is paid. Not deleting.`);
+      return;
+    }
+
+    // Booking is unpaid → release seats and delete booking
+    const show = await Show.findById(booking.show);
+    if (show) {
+      booking.bookedSeats.forEach((seat) => delete show.occupiedSeats[seat]);
+      show.markModified("occupiedSeats");
+      await show.save();
+      console.log(`Released seats for unpaid booking ${bookingId}`);
+    }
+
+    await Booking.findByIdAndDelete(booking._id);
+    console.log(`Deleted unpaid booking ${bookingId}`);
   }
-)
+);
+
 
 const sendBookingConfirmationEmail = inngest.createFunction(
   { id: "send-booking-confirmation-email" },
