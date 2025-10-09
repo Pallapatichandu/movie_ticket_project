@@ -1,26 +1,32 @@
-
-
 import Booking from "../models/Booking.js";
 import Show from "../models/show.js";
 import User from "../models/User.js";
 
-// API to check if user is admin
+// ✅ Check if user is admin
 export const isAdmin = async (req, res) => {
   res.json({ success: true, isAdmin: true });
 };
 
-// API to get dashboard data
+// ✅ Admin Dashboard Data
 export const getDashboardData = async (req, res) => {
   try {
+    // Count all paid bookings
     const bookings = await Booking.find({ isPaid: true });
-    const activeShows = await Show.find({ showDateTime: { $gte: new Date() } }).populate("movie");
+
+    // Find active shows (upcoming)
+    const activeShows = await Show.find({
+      showDateTime: { $gte: new Date() },
+    }).populate("movie");
+
+    // Count all registered users (you can filter by role if needed)
     const totalUsers = await User.countDocuments();
 
+    // ✅ Prepare dashboard data (matching frontend key names)
     const dashboardData = {
       totalBookings: bookings.length,
       totalRevenue: bookings.reduce((acc, booking) => acc + booking.amount, 0),
       activeShows,
-      totalUsers,
+      totalUser: totalUsers, // 👈 singular name (matches frontend)
     };
 
     res.json({ success: true, dashboardData });
@@ -30,10 +36,12 @@ export const getDashboardData = async (req, res) => {
   }
 };
 
-// API to get all upcoming shows
+// ✅ Get All Upcoming Shows
 export const getAllShows = async (req, res) => {
   try {
-    const shows = await Show.find({ showDateTime: { $gte: new Date() } })
+    const shows = await Show.find({
+      showDateTime: { $gte: new Date() },
+    })
       .populate("movie")
       .sort({ showDateTime: 1 });
 
@@ -44,7 +52,7 @@ export const getAllShows = async (req, res) => {
   }
 };
 
-// API to get all bookings with user and movie info
+// ✅ Get All Bookings with user and movie info
 export const getAllBookings = async (req, res) => {
   try {
     const bookings = await Booking.find({})
