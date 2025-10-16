@@ -1,16 +1,18 @@
-
-
 import { ArrowRight } from "lucide-react";
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import BlueCircle from "./BlueCircle";
-
 import MovieCard from "./MovieCard";
 import { useAppContext } from "../context/AppContext";
 
 const FeatureSection = () => {
   const navigate = useNavigate();
-  const {shows}=useAppContext()
+  const { shows } = useAppContext();
+
+  // ✅ Skip deleted or invalid movies
+  const validShows = Array.isArray(shows)
+    ? shows.filter((movie) => movie && movie._id)
+    : [];
 
   return (
     <div
@@ -42,29 +44,37 @@ const FeatureSection = () => {
 
       {/* Movies Grid */}
       <div className="row g-4 mt-4 justify-content-center">
-        {shows.slice(0, 4).map((shows) => (
-          <div
-            key={shows._id}
-            className="col-10 col-sm-6 col-md-4 col-lg-3 d-flex justify-content-center"
-          >
-            <MovieCard movie={shows} />
-          </div>
-        ))}
+        {validShows.length > 0 ? (
+          validShows.slice(0, 4).map((show) => (
+            <div
+              key={show._id}
+              className="col-10 col-sm-6 col-md-4 col-lg-3 d-flex justify-content-center"
+            >
+              <MovieCard movie={show} />
+            </div>
+          ))
+        ) : (
+          <p className="text-center text-light mt-4">
+            No movies available right now.
+          </p>
+        )}
       </div>
 
       {/* Show More Button */}
-      <div className="d-flex justify-content-center mt-5">
-        <button
-          type="button"
-          onClick={() => {
-            navigate("/movies");
-            window.scrollTo(0, 0);
-          }}
-          className="btn btn-primary px-4 py-2 fw-medium rounded"
-        >
-          Show More
-        </button>
-      </div>
+      {validShows.length > 4 && (
+        <div className="d-flex justify-content-center mt-5">
+          <button
+            type="button"
+            onClick={() => {
+              navigate("/movies");
+              window.scrollTo(0, 0);
+            }}
+            className="btn btn-primary px-4 py-2 fw-medium rounded"
+          >
+            Show More
+          </button>
+        </div>
+      )}
 
       {/* Extra Styling */}
       <style>
@@ -87,5 +97,3 @@ const FeatureSection = () => {
 };
 
 export default FeatureSection;
-
-
